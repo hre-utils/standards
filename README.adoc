@@ -1,0 +1,22 @@
+= Standards & Guiding Principals
+:toc:       left
+:toclevels: 3
+:source-highlighter:     pygments
+:pygments-style:         algol_nu
+:pygments-linenums-mode: table
+
+The principals by which HRE Utils shall all adhere, and the prerequisite boilerplate for such utilities.
+
+== Principals
+=== Make it functional
+Above all else, everything must work.
+It must serve a clear and defined purpose.
+=== Make it interesting
+There may be an _easier_ way to do something.
+There may be a _better_ suited tool or a language for the problem at hand.
+
+=== Make it right
+
+== Standards
+=== Directories
+Have respect for the user's standard paths: `$XDG_CONFIG_HOME`, `$XDG_DATA_HOME`
