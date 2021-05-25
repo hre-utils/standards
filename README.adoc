@@ -181,7 +181,7 @@ while [[ $# -gt 0 ]] ; do
 
       *)    # Default if no opt yet passed:
             if [[ -z $lopt ]] ; then
-               dependencies+=( $1 )
+               __alpha__+=( $1 )
             else
                declare -n arr=$lopt
                arr+=( $1 )
