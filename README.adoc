@@ -1,5 +1,5 @@
 = Standards & Guiding Principals
-:toc:       left
+:toc: left
 :toclevels: 3
 :source-highlighter:     pygments
 :pygments-style:         algol_nu
@@ -43,14 +43,159 @@ Example: `hre-lib-colors.sh`.
 
 They must contain no executable code upon sourcing.
 Setup logic is in an `__init__` function, which is run by `hre-lib-import.sh`.
-Teardown should be placed into link:#_name_uniqueness[uniquely named]
+Teardown should be placed into a link:#_name_uniqueness[uniquely prefixed] function, the name of which is appended to a global array `TEARDOWN`.
+A `trap EXIT` will run each function in `${TEARDOWN[@]}`.
+
+=== Variable names
+=== Function names
+Powershell did very few things right.
+One of them is their 'Verb-Noun' naming convention.
+It allows for self-documenting function names, reducing the amount to which you must look up a function's definition to recall what it does.
+
+A function's name should make the usage self-evident.
+What do you think `generate_unique_id()` does?
+How about `arrgg()`?
 
 
 == Boilerplate
 === Argument parsing
+
+.getopts-esque
+[source,bash]
+----
+# Defaults & boolean:
+__alpha__=false
+
+while [[ "$#" -gt 0 ]] ; do
+   case "$1" in
+      -h|--help)
+            usage 0 ;;
+
+      # Switch:
+      -a|--alpha)
+            __alpha__=true ;;
+
+      # Param:
+      -b|--bravo)
+            shift ; __bravo__="$1" ; shift ;;
+
+      -[^-]*)
+            opts=( $( grep -o . < <(sed 's,^-,,' <<< "$1") ) )
+            for idx in "${!opts[@]}" ; do
+               opts[$idx]="-${opts[$idx]}"
+            done
+
+            shift
+
+            # If there's only 1 opt, and it hasn't already been covered by those
+            # above, it's __unsupported__. Shift it off and continue.
+            [[ ${#opts[@]} -eq 1 ]] && {
+               __unsupported__+=( ${opts[0]} )
+               continue
+            }
+
+            set -- ${opts[@]} $@ ;;
+
+      --) shift ; break ;;
+
+      --*) __unsupported__+=( "$1" ) ; shift ;;
+
+      *) __positional__+=( "$1" ) ; shift ;;
+   esac
+done
+----
+
+.last opt
+[source,bash]
+----
+local lopt
+declare -a __alpha__ __bravo__
+
+while [[ $# -gt 0 ]] ; do
+   case $1 in
+      -a|--alpha)
+            shift ; lopt=__alpha__ ;;
+
+      -b|--bravo)
+            shift ; lopt=__bravo__ ;;
+
+      *)    # Default if no opt yet passed:
+            if [[ -z $lopt ]] ; then
+               dependencies+=( $1 )
+            else
+               declare -n arr=$lopt
+               arr+=( $1 )
+            fi
+
+            shift ;;
+   esac
+done
+----
+
+
 === Imports
 === Error handling
+> Errors should never pass silently. +
+> Unless explicitly silenced.
+> -- The Zen of Python
+
+All errors should be handled and tracked appropriately.
+Though only exit when execution _cannot_ continue.
+
+When parsing a config file I too often see programs exit on the first error found.
+Don't.
+Parse and collect all errors & warnings.
+Present a summation.
+Don't punish the user for your own lack of foresight, design, and implementation.
+
+.argparse example
+[source,bash]
+----
+while [[ $# -gt 0 ]] ; do
+   case $1 in
+      -h|--help)
+            usage 0 ;;
+
+      -a|--alpha)
+            __alpha__=true ; shift ;;
+
+      -*)   # Invalid args:
+            __invalid__="$1" ; shift ;;
+
+      *)   # Positional:
+            __positional__+=( "$1" ) ; shift ;;
+   esac
+done
+
+declare -a VALIDATION_ERRORS
+if [[ ${#__invalid__[@]} -gt 0 ]] ; then
+   VALIDATION_ERRORS+=(
+      "Invalid options: ${__invalid__[@]}"
+   )
+fi
+
+if [[ ${#__positional__[@]} -ne 1 ]] ; then
+   VALIDATION_ERRORS+=(
+      "Received ${#__positional__[@]} positional args, expected 1"
+   )
+fi
+
+if [[ ${#VALIDATION_ERRORS[@]} -gt 0 ]] ; then
+   for idx in "${!VALIDATION_ERRORS[@]}" ; do
+      echo "$((idx+1)). ${VALIDATION_ERRORS[$idx]}"
+   done
+   exit 1
+fi
+----
+
+This handles all classifications of errors as effectively interchangable.
+We can easily handle them individually within their respective `if` statements.
+Maybe in the above case, we don't need to `exit` if an additional invalid positional parameter was passed.
+Perhaps ``warn``ing the user, stripping the param, and continuing is sufficient.
+
+
 === Debugging & print statements
+
 === Name Uniqueness
 Bash does not have file scoped variables, only local/global.
 As heavy use of ``import``s is made, we cannot guarantee one file's variables aren't stomped on by another.
