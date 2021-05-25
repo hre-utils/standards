@@ -9,9 +9,9 @@ The principals by which HRE Utils shall all adhere, and the prerequisite boilerp
 
 == Principals
 === Make it functional
-Above all else, everything must work.
 It must serve a clear and defined purpose.
-And it must effectively solve the problem set forth.
+It must effectively solve the problem set forth.
+Above all else, it must work.
 
 === Make it interesting
 There may be an easier way to do something.
@@ -23,39 +23,103 @@ This is a project of exploration, learning, and bending the rules a bit.
 === Make it right
 Just because we're approaching things in a potentially silly way, there's no reason to not do them _right_.
 Do a good job, don't cut corners.
+"`Good enough`" isn't.
 
 
 == Standards
 === Paths
 Respect user's paths if set: `$XDG_CONFIG_HOME`, `$XDG_DATA_HOME`.
 
-Config files are always located at: `${XDG_CONFIG_HOME:-$HOME/.config}/hre-utils/$PROJECT/config`
-Data is always located at: `${XDG_DATA_HOME:-$HOME/.local/share}/hre-utils/$PROJECT/`
+.Config directory
+[source,bash]
+----
+"${XDG_CONFIG_HOME:-$HOME/.config}/hre-utils/$PROJECT/"
+----
+
+.Data directory
+[source,bash]
+----
+"${XDG_DATA_HOME:-$HOME/.local/share}/hre-utils/$PROJECT/"
+----
 
 === Dependencies
 All '`library`' files should follow a standard naming convention:
 
+.Filename requirements
 . Contain only lower-case letters, dashes, and a '`.sh`' extension
 . Parts separated by '-'
 . Begin with `hre-lib-`
 
 Example: `hre-lib-colors.sh`.
 
-They must contain no executable code upon sourcing.
-Setup logic is in an `__init__` function, which is run by `hre-lib-import.sh`.
-Teardown should be placed into a link:#_name_uniqueness[uniquely prefixed] function, the name of which is appended to a global array `TEARDOWN`.
+.Execution requirements
+. Contains no executable code
+. Setup logic is in an `\\__init__` function
+. Teardown should be placed into a link:#_name_uniqueness[uniquely prefixed] function, the name of which is appended to a global array `TEARDOWN`
+
 A `trap EXIT` will run each function in `${TEARDOWN[@]}`.
+The `\\__init__` function is run when imported.
+
+.Additional requirements
+. Implement a unique named variable to prevent duplicate imports
+
+== Style Guide
+=== Indentation
+Spaces, not tabs.
+
+4 is too many, 2 is too few. 3 is correct.
+
+=== Text wrap
+Whenever possible, text should wrap at 80 characters.
+
+_Not_ for compatibility with archaic systems or standards, but because it provides a solid benchmark for a medium-narrow width terminal.
+If a line begins to exceed 80 columns, ask why.
+Can it be better written on more lines for clarity?
+Can it be broken up using an array to pass the parameters?
+More often than not, the answer is "`yes`".
 
 === Variable names
-=== Function names
-Powershell did very few things right.
-One of them is their 'Verb-Noun' naming convention.
-It allows for self-documenting function names, reducing the amount to which you must look up a function's definition to recall what it does.
+Variables should be descriptive, and consistently styled to indicate as to their scope.
 
+[cols='1,1,3']
+|===
+| Example | Scope | Description
+
+| `$local`
+| Local
+| All lower case, used within functions or in-line script
+
+| `$GLOBAL`
+| Global
+| All caps, do not collide with Bash https://tldp.org/LDP/abs/html/internalvariables.html[global variables]
+
+| `$\\__parameter__`
+| Global
+| Parameters set by CLI flags, double-underscore, all lower
+
+| `$_intermediate`
+| Local
+| Used as an intermediate calculation before the final value
+
+| `${self[key]}`
+| File local (kinda)
+| File unique map holding key:value pairs
+|===
+
+=== Function names
+Powershell did very few things right, though their 'Verb-Noun' naming convention is among them.
+It allows for self-documenting function names, reducing the amount to which functions must be looked up to determine what they do.
 A function's name should make the usage self-evident.
+
 What do you think `generate_unique_id()` does?
+What does it return?
+
 How about `arrgg()`?
 
+The exception is when introducing functions to be sourced by other scripts.
+They are given simple, straightforward names prefixed with a period.
+Example: `.import`.
+It is then clear when calling them that it's a sourced '`method`'.
 
 == Boilerplate
 === Argument parsing
@@ -80,11 +144,7 @@ while [[ "$#" -gt 0 ]] ; do
             shift ; __bravo__="$1" ; shift ;;
 
       -[^-]*)
-            opts=( $( grep -o . < <(sed 's,^-,,' <<< "$1") ) )
-            for idx in "${!opts[@]}" ; do
-               opts[$idx]="-${opts[$idx]}"
-            done
-
+            opts=( $(sed -E -e 's,^-,,' -e 's,(.),-\1\n,g' <<< "$1") )
             shift
 
             # If there's only 1 opt, and it hasn't already been covered by those
@@ -132,15 +192,50 @@ while [[ $# -gt 0 ]] ; do
 done
 ----
 
+=== Debugging & print statements
+The user should only see text that is necessary.
+Either to their immediate decision making, altering the execution of the script, or errors & warnings.
 
-=== Imports
+Output levels should be set in a configuration file, depending on user perferences.
+Log levels and output are defined as follows:
+
+[source,bash]
+----
+function write {
+   local lvl=$1 text="$2"
+
+   local debug_level=${__debug_level__:-$debug_level}
+   read low high __ <<< ${debug_level//,/ }
+   low=${low:-1} ; high=${high:-3}
+
+   [[ $lvl -lt $low  ]] && return 0
+   [[ $lvl -gt $high ]] && return 0
+
+   local lvlname color
+   case $lvl in
+     -2) color="${bk}"  ; lvlname='TRASH' ;;
+     -1) color="${bk}"  ; lvlname='NOISE' ;;
+      0) color="${cy}"  ; lvlname='DEBUG' ;;
+      1) color="${wh}"  ; lvlname='INFO'  ;;    # <- default user-visible from
+      2) color="${yl}"  ; lvlname='WARN'  ;;    #    here down
+      3) color="${brd}" ; lvlname='CRIT'  ;;
+
+      *) color="${wh}"  ; lvlname='INFO'  ;;
+   esac
+
+   echo "${color}[$lvlname] ${text}${rst}"
+}
+----
+
+Always tend towards sparse & concise output.
+
 === Error handling
 > Errors should never pass silently. +
 > Unless explicitly silenced.
 > -- The Zen of Python
 
 All errors should be handled and tracked appropriately.
-Though only exit when execution _cannot_ continue.
+Only exit when execution _cannot_ continue.
 
 When parsing a config file I too often see programs exit on the first error found.
 Don't.
@@ -151,6 +246,7 @@ Don't punish the user for your own lack of foresight, design, and implementation
 .argparse example
 [source,bash]
 ----
+# Handle CLI arguments:
 while [[ $# -gt 0 ]] ; do
    case $1 in
       -h|--help)
@@ -167,7 +263,9 @@ while [[ $# -gt 0 ]] ; do
    esac
 done
 
+# Create array to hold error output:
 declare -a VALIDATION_ERRORS
+
 if [[ ${#__invalid__[@]} -gt 0 ]] ; then
    VALIDATION_ERRORS+=(
       "Invalid options: ${__invalid__[@]}"
@@ -180,6 +278,7 @@ if [[ ${#__positional__[@]} -ne 1 ]] ; then
    )
 fi
 
+# If output array has values, print to user & exit:
 if [[ ${#VALIDATION_ERRORS[@]} -gt 0 ]] ; then
    for idx in "${!VALIDATION_ERRORS[@]}" ; do
       echo "$((idx+1)). ${VALIDATION_ERRORS[$idx]}"
@@ -193,8 +292,51 @@ We can easily handle them individually within their respective `if` statements.
 Maybe in the above case, we don't need to `exit` if an additional invalid positional parameter was passed.
 Perhaps ``warn``ing the user, stripping the param, and continuing is sufficient.
 
+=== Imports
+Must sequentially check:
 
-=== Debugging & print statements
+. _./lib/$file_
+. `$(which $file)`
+
+Providing a relative _lib/_ dir allows the user to potentially override (or extend) functionality.
+
+.Sourcing with https://github.com/hre-utils/import[.import]
+[source,bash]
+----
+source $(which hre-lib-source.sh)
+.import hre-lib-conf.sh --optional hre-lib-colors.sh
+----
+
+.Manual sourcing
+[source,bash]
+----
+dependencies=( hre-lib-colors.sh  hre-lib-conf.sh )
+dep_not_met=()
+
+for dep in "${dependencies[@]}" ; do
+   #───────────────────────────( already sourced )──────────────────────────────
+   # If we've already sourced this dependency, its respective __sourced_XX var
+   # will be set. Don't re-source.
+   _dep="${dep%.*}"
+   dep_sourcename="__source_${_dep//[^[:alnum:]_]/_}__"
+   [[ -n "${!dep_sourcename}" ]] && continue
+
+   #─────────────────────────────( try source )─────────────────────────────────
+   if [[ -e "${LIBDIR}/${dep}" ]] ; then
+      source "${LIBDIR}/${dep}"
+   elif [[ $(which ${dep} 2>/dev/null) ]] ; then
+      source "$(which ${dep})"
+   else
+      dep_not_met+=( "$dep" )
+   fi
+done
+
+if [[ ${#dep_not_met} -gt 0 ]] ; then
+   echo "Failed to source: [${dep_not_met[@]}]"
+   exit 1
+fi
+----
+
 
 === Name Uniqueness
 Bash does not have file scoped variables, only local/global.
@@ -218,7 +360,7 @@ function __init__ {
    name=${file//[^[:alnum:]_]/_}
    name=${file/[[:digit:]]/_}
 
-   declare -Ag $name   
+   declare -Ag $name
 
    # ...
 }
