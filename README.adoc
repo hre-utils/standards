@@ -11,12 +11,87 @@ The principals by which HRE Utils shall all adhere, and the prerequisite boilerp
 === Make it functional
 Above all else, everything must work.
 It must serve a clear and defined purpose.
+And it must effectively solve the problem set forth.
+
 === Make it interesting
-There may be an _easier_ way to do something.
-There may be a _better_ suited tool or a language for the problem at hand.
+There may be an easier way to do something.
+There may be a better suited tool or language for the problem at hand.
+But implementing '`solved`' code is uninteresting.
+Why use Python's `import argparse` when you can write your own Bash argument parser.
+This is a project of exploration, learning, and bending the rules a bit.
 
 === Make it right
+Just because we're approaching things in a potentially silly way, there's no reason to not do them _right_.
+Do a good job, don't cut corners.
+
 
 == Standards
-=== Directories
-Have respect for the user's standard paths: `$XDG_CONFIG_HOME`, `$XDG_DATA_HOME`
+=== Paths
+Respect user's paths if set: `$XDG_CONFIG_HOME`, `$XDG_DATA_HOME`.
+
+Config files are always located at: `${XDG_CONFIG_HOME:-$HOME/.config}/hre-utils/$PROJECT/config`
+Data is always located at: `${XDG_DATA_HOME:-$HOME/.local/share}/hre-utils/$PROJECT/`
+
+=== Dependencies
+All '`library`' files should follow a standard naming convention:
+
+. Contain only lower-case letters, dashes, and a '`.sh`' extension
+. Parts separated by '-'
+. Begin with `hre-lib-`
+
+Example: `hre-lib-colors.sh`.
+
+They must contain no executable code upon sourcing.
+Setup logic is in an `__init__` function, which is run by `hre-lib-import.sh`.
+Teardown should be placed into link:#_name_uniqueness[uniquely named]
+
+
+== Boilerplate
+=== Argument parsing
+=== Imports
+=== Error handling
+=== Debugging & print statements
+=== Name Uniqueness
+Bash does not have file scoped variables, only local/global.
+As heavy use of ``import``s is made, we cannot guarantee one file's variables aren't stomped on by another.
+
+Wherever possible, '`library`' code should contain exclusively local variables.
+When not possible, they should be stored as key:value pairs in a uniquely (yet reproducibly) named dictionary.
+There are two possible methods that have been used for a reasonable assurance of uniqueness across currently sourced files:
+
+.Transformed
+[source,bash]
+----
+function __init__ {
+   # ...
+
+   # Grab file name from full path, strip suffix
+   local name=$( basename "${BASH_SOURCE[0]%.*}" )
+
+   # Replace anything that isn't a bash 'word' character [_a-zA-Z0-9] with '_',
+   # then ensure 1st character is not a digit:
+   name=${file//[^[:alnum:]_]/_}
+   name=${file/[[:digit:]]/_}
+
+   declare -Ag $name   
+
+   # ...
+}
+----
+
+.Hashed
+[source,bash]
+----
+function __init__ {
+   # ...
+
+   # md5 the full file path, ensuring 1st character is not a digit:
+   declare -Ag $(
+      md5sum "${BASH_SOURCE[0]}" | awk 'sub(/^[[:digit:]]/, "_") {print $1}'
+   )
+
+   # ...
+}
+----
+
+The latter approach has fewer steps, but requires both `md5sum` and `gawk`.
